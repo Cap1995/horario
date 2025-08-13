@@ -1,9 +1,10 @@
-# app.py — Reservas 20 min con almuerzo (SQLite) + descargas
+# app.py — Reservas 20 min con almuerzo (SQLite) + Exportación Excel profesional
 import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime, date, time, timedelta
 import os
+from io import BytesIO
 
 # Auto-refresh opcional
 try:
@@ -32,8 +33,8 @@ def get_conn():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS reservas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fecha TEXT NOT NULL,
-            hora  TEXT NOT NULL,
+            fecha TEXT NOT NULL,   -- ISO yyyy-mm-dd
+            hora  TEXT NOT NULL,   -- HH:MM
             nombre TEXT NOT NULL,
             contacto TEXT,
             comentario TEXT,
@@ -52,7 +53,6 @@ def agregar_reserva(fecha:str, hora:str, nombre:str, contacto:str, comentario:st
             )
         return True
     except sqlite3.IntegrityError:
-        # Violación UNIQUE(fecha, hora)
         return False
 
 @st.cache_data(show_spinner=False)
@@ -76,9 +76,92 @@ def leer_todas_reservas() -> pd.DataFrame:
 def borrar_reservas_dia(fecha:str):
     with get_conn() as conn:
         conn.execute("DELETE FROM reservas WHERE fecha = ?", (fecha,))
-    # limpiar cache
     leer_reservas_dia.clear()
     leer_todas_reservas.clear()
+
+# ---------- Excel profesional ----------
+def build_excel_bytes(df: pd.DataFrame, titulo: str = "Reservas") -> bytes:
+    """
+    Genera un Excel .xlsx con estilos profesionales usando XlsxWriter y lo retorna en memoria (bytes).
+    """
+    # Asegurar columnas en orden deseado si existen
+    cols = ["fecha", "hora", "nombre", "contacto", "comentario", "created_at"]
+    df = df[[c for c in cols if c in df.columns]].copy()
+
+    # Tipos para mejor formato
+    # Convertir fecha/hora a objetos (si vienen como texto)
+    if "fecha" in df.columns:
+        # Mostrar como fecha
+        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce").dt.date
+    if "hora" in df.columns:
+        # Mantener texto HH:MM o interpretar como tiempo
+        # Para Excel, lo dejamos como texto "HH:MM" para compatibilidad universal
+        df["hora"] = df["hora"].astype(str)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        sheet_name = "Reservas"
+        df.to_excel(writer, index=False, sheet_name=sheet_name, startrow=3)
+
+        wb  = writer.book
+        ws  = writer.sheets[sheet_name]
+
+        # Estilos
+        fmt_title = wb.add_format({
+            "bold": True, "font_size": 16, "align": "left", "valign": "vcenter"
+        })
+        fmt_subtitle = wb.add_format({
+            "italic": True, "font_size": 9, "font_color": "#666666"
+        })
+        fmt_header = wb.add_format({
+            "bold": True, "bg_color": "#F2F2F2", "border": 1, "align": "center", "valign": "vcenter"
+        })
+        fmt_cell = wb.add_format({"border": 1})
+        fmt_wrap = wb.add_format({"border": 1, "text_wrap": True})
+        fmt_date = wb.add_format({"border": 1, "num_format": "yyyy-mm-dd"})
+        fmt_small = wb.add_format({"font_size": 9, "font_color": "#666666"})
+
+        # Título y subtítulo
+        ws.merge_range("A1:F1", f"{titulo}", fmt_title)
+        ws.write("A2", f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", fmt_subtitle)
+
+        # Encabezados con formato
+        for col_idx, col_name in enumerate(df.columns):
+            ws.write(3, col_idx, col_name.capitalize(), fmt_header)
+
+        # Bordes a todo el rango de datos
+        n_rows, n_cols = df.shape
+        if n_rows > 0:
+            ws.conditional_format(4, 0, 4 + n_rows - 1, n_cols - 1, {
+                "type": "no_errors", "format": fmt_cell
+            })
+
+        # Anchos de columna y formatos por columna
+        col_widths = {
+            "fecha": 12,
+            "hora": 8,
+            "nombre": 28,
+            "contacto": 26,
+            "comentario": 42,
+            "created_at": 20
+        }
+        for col_idx, col_name in enumerate(df.columns):
+            width = col_widths.get(col_name, 18)
+            ws.set_column(col_idx, col_idx, width)
+            # Aplicar formatos específicos
+            if col_name == "fecha":
+                ws.set_column(col_idx, col_idx, width, fmt_date)
+            elif col_name == "comentario":
+                ws.set_column(col_idx, col_idx, width, fmt_wrap)
+
+        # Autofiltro
+        ws.autofilter(3, 0, 3 + n_rows, n_cols - 1)
+
+        # Footer simple
+        ws.write(4 + n_rows + 1, 0, "Exportado desde la app de reservas (SQLite).", fmt_small)
+
+    output.seek(0)
+    return output.read()
 
 # ---------- Lógica de slots ----------
 def generar_slots(d: date):
@@ -90,7 +173,6 @@ def generar_slots(d: date):
         if not (BLOQUEO_INICIO <= h < BLOQUEO_FIN):
             slots.append(h.strftime("%H:%M"))
         t += timedelta(minutes=INTERVALO_MIN)
-    # no exceder FIN
     return [s for s in slots if s <= FIN.strftime("%H:%M")]
 
 # ---------- UI ----------
@@ -139,7 +221,6 @@ with st.form("form_reserva", clear_on_submit=True):
             ok = agregar_reserva(fecha_str, slot, nombre.strip(), contacto.strip(), comentario.strip())
             if ok:
                 st.success(f"Reserva confirmada para el {fecha_str} a las {slot}.")
-                # invalidar cache para ver el nuevo estado
                 leer_reservas_dia.clear()
                 df_dia = leer_reservas_dia(fecha_str)
             else:
@@ -155,16 +236,21 @@ else:
     st.write("No hay reservas para esta fecha.")
 
 with st.expander("⚙️ Opciones (admin mínimo)"):
-    st.caption("Estas acciones afectan el archivo local SQLite `reservas.db`.")
+    st.caption("Estas acciones afectan la base local `reservas.db`.")
     colA, colB, colC = st.columns(3)
 
-    # Descargar CSV de TODO
+    # Descargar Excel estilado (todas las reservas)
     with colA:
-        if st.button("Generar CSV", use_container_width=True):
+        if st.button("Generar Excel profesional", use_container_width=True):
             df_all = leer_todas_reservas()
-            csv = df_all.to_csv(index=False, encoding="utf-8")
-            st.download_button("Descargar reservas.csv", data=csv, file_name="reservas.csv",
-                               mime="text/csv", use_container_width=True)
+            xlsx_bytes = build_excel_bytes(df_all, titulo="Reservas (todas las fechas)")
+            st.download_button(
+                "Descargar reservas.xlsx",
+                data=xlsx_bytes,
+                file_name="reservas.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
 
     # Borrar el día seleccionado
     with colB:
