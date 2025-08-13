@@ -235,37 +235,25 @@ if not df_dia.empty:
 else:
     st.write("No hay reservas para esta fecha.")
 
-with st.expander("⚙️ Opciones (admin mínimo)"):
-    st.caption("Estas acciones afectan la base local `reservas.db`.")
-    colA, colB, colC = st.columns(3)
+st.divider()
+st.subheader("Reservas del día")
+if not df_dia.empty:
+    mostrar = df_dia.sort_values("hora")[["hora", "nombre", "contacto", "comentario", "created_at"]]
+    mostrar.index = range(1, len(mostrar) + 1)
+    st.dataframe(mostrar, use_container_width=True, height=320)
 
-    # Descargar Excel estilado (todas las reservas)
-    with colA:
-        if st.button("Generar Excel profesional", use_container_width=True):
-            df_all = leer_todas_reservas()
-            xlsx_bytes = build_excel_bytes(df_all, titulo="Reservas (todas las fechas)")
-            st.download_button(
-                "Descargar reservas.xlsx",
-                data=xlsx_bytes,
-                file_name="reservas.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+    # Botón directo para exportar Excel profesional
+    df_all = leer_todas_reservas()
+    xlsx_bytes = build_excel_bytes(df_all, titulo="Reservas (todas las fechas)")
+    st.download_button(
+        "📥 Descargar Excel de reservas",
+        data=xlsx_bytes,
+        file_name="reservas.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+else:
+    st.write("No hay reservas para esta fecha.")
 
-    # Borrar el día seleccionado
-    with colB:
-        if st.button("Vaciar reservas de la fecha", type="secondary", use_container_width=True):
-            borrar_reservas_dia(fecha_str)
-            st.success(f"Reservas del {fecha_str} borradas.")
-
-    # Descargar el archivo .db completo
-    with colC:
-        if os.path.exists(DB_PATH):
-            with open(DB_PATH, "rb") as f:
-                st.download_button("Descargar reservas.db", data=f.read(),
-                                   file_name="reservas.db", mime="application/octet-stream",
-                                   use_container_width=True)
-        else:
-            st.info("No existe base de datos aún.")
 
 st.caption("Nota: En Streamlit Cloud el disco es efímero; para persistencia confiable usa una BD gestionada (p. ej., Postgres en Neon/Supabase/Railway).")
