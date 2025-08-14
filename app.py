@@ -162,8 +162,8 @@ if _HAS_AUTOREFRESH:
 else:
     st.caption("🔄 Auto-actualización deshabilitada (instala streamlit-autorefresh para activarla).")
 
-st.title("📅 Reservas en intervalos de 20 minutos")
-st.caption("Horario: 09:00–18:00 • Almuerzo sin reservas: 13:00–14:00")
+st.title("📅 Revisición descriptores de cargo")
+st.caption("Reserve su horario")
 
 # Selección de fecha SOLO entre las permitidas
 st.subheader("Selecciona la fecha")
