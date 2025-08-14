@@ -176,7 +176,6 @@ else:
     st.caption("🔄 Auto-actualización deshabilitada (instala streamlit-autorefresh para activarla).")
 
 st.title("📅 Revisición descriptores de cargo")
-st.caption("Reserve su horario")
 st.caption("Desarrollada por **Elias Concha**")
 
 # Selección de fecha SOLO entre las permitidas
