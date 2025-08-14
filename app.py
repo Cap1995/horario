@@ -24,7 +24,7 @@ BLOQUEO_FIN = time(14, 0)
 INTERVALO_MIN = 20
 AUTOREFRESH_MS = 10_000  # 10 s
 
-st.title("📅 Reservas en intervalos de 20 minutos")
+st.title("📅 Reservas de horas")
 st.caption("Horario: 09:00–18:00 • Almuerzo sin reservas: 13:00–14:00 • Actualiza cada 10 s")
 
 # ---------- DB ----------
