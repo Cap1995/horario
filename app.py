@@ -84,6 +84,19 @@ def leer_todas_reservas() -> pd.DataFrame:
         )
     return df
 
+def borrar_reserva_por_slot(fecha: str, hora: str) -> bool:
+    """Borra una reserva única por (fecha, hora). Devuelve True si existía y se borró."""
+    with get_conn() as conn:
+        cur = conn.execute("SELECT COUNT(*) FROM reservas WHERE fecha = ? AND hora = ?", (fecha, hora))
+        existe = cur.fetchone()[0] > 0
+        if not existe:
+            return False
+        conn.execute("DELETE FROM reservas WHERE fecha = ? AND hora = ?", (fecha, hora))
+    # limpiar caches
+    leer_reservas_dia.clear()
+    leer_todas_reservas.clear()
+    return True
+
 # ---------- Excel profesional ----------
 def build_excel_bytes(df: pd.DataFrame, titulo: str = "Reservas") -> bytes:
     cols = ["fecha", "hora", "nombre", "created_at"]
@@ -197,7 +210,7 @@ with st.form("form_reserva", clear_on_submit=True):
             else:
                 st.error("Ese horario acaba de ser tomado por otra persona. Intenta con otro.")
 
-# Sección protegida: ver reservas del día + Excel
+# Sección protegida: ver reservas del día + Excel + eliminar
 st.divider()
 st.subheader("Reservas del día (sección protegida)")
 
@@ -215,21 +228,52 @@ if not st.session_state.authed:
         else:
             st.error("❌ Clave incorrecta.")
 else:
-    # Tabla
+    # Tabla del día
+    df_dia = leer_reservas_dia(fecha_str)  # refrescar por si cambió
     if not df_dia.empty:
         mostrar = df_dia.sort_values("hora")[["hora", "nombre", "created_at"]]
         mostrar.index = range(1, len(mostrar) + 1)
         st.dataframe(mostrar, use_container_width=True, height=320)
+
+        # --- Borrado de una reserva específica ---
+        st.markdown("### 🗑️ Borrar una reserva")
+        # Opciones “HH:MM — Nombre”
+        opciones = [f"{row['hora']} — {row['nombre']}" for _, row in df_dia.sort_values("hora").iterrows()]
+        mapa_hora = {f"{row['hora']} — {row['nombre']}": row["hora"] for _, row in df_dia.iterrows()}
+        sel = st.selectbox("Selecciona la reserva a borrar", options=opciones, placeholder="Elige una reserva")
+
+        col_b1, col_b2 = st.columns([1,1])
+        with col_b1:
+            confirmar = st.checkbox("Confirmo borrar la reserva seleccionada", value=False)
+        with col_b2:
+            borrar = st.button("Borrar reserva", type="primary", use_container_width=True)
+
+        if borrar:
+            if not sel:
+                st.warning("Selecciona una reserva.")
+            elif not confirmar:
+                st.warning("Marca la casilla de confirmación antes de borrar.")
+            else:
+                hora_sel = mapa_hora[sel]
+                ok = borrar_reserva_por_slot(fecha_str, hora_sel)
+                if ok:
+                    st.success(f"Reserva de las {hora_sel} borrada.")
+                else:
+                    st.info("No se encontró la reserva (quizá ya fue eliminada).")
+                # refrescar estado después de borrar
+                df_dia = leer_reservas_dia(fecha_str)
+
+        st.divider()
+        # Botón: Excel profesional (todas las fechas)
+        df_all = leer_todas_reservas()
+        xlsx_bytes = build_excel_bytes(df_all, titulo="Reservas (todas las fechas)")
+        st.download_button(
+            "📥 Descargar Excel de reservas",
+            data=xlsx_bytes,
+            file_name="reservas.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
     else:
         st.info("No hay reservas para esta fecha.")
 
-    # Botón único: Excel profesional (todas las fechas)
-    df_all = leer_todas_reservas()
-    xlsx_bytes = build_excel_bytes(df_all, titulo="Reservas (todas las fechas)")
-    st.download_button(
-        "📥 Descargar Excel de reservas",
-        data=xlsx_bytes,
-        file_name="reservas.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
