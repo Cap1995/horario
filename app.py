@@ -28,12 +28,12 @@ AUTOREFRESH_MS = 10_000  # 10 s
 
 # Fechas permitidas (ajústalas a tu necesidad)
 ALLOWED_DATES = sorted({
-    date(2025, 8, 19),  # martes 19/08/2025 (solo hasta 13:00)
-    date(2025, 8, 20),  # miercoles 19/08/2025
-    date(2025, 8, 21),  # jueves 20/08/2025
-    date(2025, 8, 22),  # viernes 21/08/2025
+    date(2025, 8, 25),  # martes 19/08/2025 (solo hasta 13:00)
+    date(2025, 8, 26),  # miercoles 19/08/2025
+    date(2025, 8, 27),  # jueves 20/08/2025
+    date(2025, 8, 28),  # viernes 21/08/2025
 })
-FRIDAY_SHORT_DAY = date(2025, 8, 22)  # este viernes termina a las 13:00
+FRIDAY_SHORT_DAY = date(2025, 8, 29)  # este viernes termina a las 13:00
 
 # Clave admin para ver reservas (configurable en secrets)
 ADMIN_KEY = st.secrets.get("ADMIN_KEY", "admin123")
