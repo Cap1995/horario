@@ -32,6 +32,7 @@ ALLOWED_DATES = sorted({
     date(2025, 8, 26),  # miercoles 19/08/2025
     date(2025, 8, 27),  # jueves 20/08/2025
     date(2025, 8, 28),  # viernes 21/08/2025
+    date(2025, 8, 29)
 })
 FRIDAY_SHORT_DAY = date(2025, 8, 29)  # este viernes termina a las 13:00
 
