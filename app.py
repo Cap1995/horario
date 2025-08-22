@@ -177,7 +177,7 @@ else:
     st.caption("🔄 Auto-actualización deshabilitada (instala streamlit-autorefresh para activarla).")
 
 st.title("📅 Revisión descriptores de cargo")
-st.caption("Desarrollada por **Elias Concha**")
+st.caption("Developed by **Elias Concha**")
 
 # Selección de fecha SOLO entre las permitidas
 st.subheader("Selecciona la fecha")
